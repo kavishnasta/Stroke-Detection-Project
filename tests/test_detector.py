@@ -5,6 +5,8 @@ from stroke_detection.detector import (
     STATUS_NEUTRAL,
     STATUS_STROKE,
     STATUS_PALSY,
+    BASELINE_MODE,
+    SYMMETRY_MODE,
 )
 
 
@@ -137,3 +139,40 @@ class TestStrokeDetector:
         status = det.get_status()
         assert status["alert"] is False
         assert status["status_message"] == STATUS_NEUTRAL
+
+
+class TestSymmetryMode:
+    def test_neutral_symmetric(self):
+        det = StrokeDetector(mode=SYMMETRY_MODE, symmetry_threshold=0.15)
+        metrics = {"lower_symmetry_ratio": 0.95, "upper_symmetry_ratio": 0.96}
+        status = det.update(metrics, timestamp=0.0)
+        assert status["alert"] is False
+        assert status["status_message"] == STATUS_NEUTRAL
+
+    def test_stroke_lower_only(self):
+        det = StrokeDetector(mode=SYMMETRY_MODE, symmetry_threshold=0.15)
+        metrics = {"lower_symmetry_ratio": 0.70, "upper_symmetry_ratio": 0.95}
+        status = det.update(metrics, timestamp=0.0)
+        assert status["alert"] is True
+        assert status["status_message"] == STATUS_STROKE
+
+    def test_palsy_both(self):
+        det = StrokeDetector(mode=SYMMETRY_MODE, symmetry_threshold=0.15)
+        metrics = {"lower_symmetry_ratio": 0.70, "upper_symmetry_ratio": 0.70}
+        status = det.update(metrics, timestamp=0.0)
+        assert status["alert"] is True
+        assert status["status_message"] == STATUS_PALSY
+
+    def test_set_mode_resets(self):
+        det = StrokeDetector(mode=SYMMETRY_MODE, symmetry_threshold=0.15)
+        metrics = {"lower_symmetry_ratio": 0.70, "upper_symmetry_ratio": 0.95}
+        det.update(metrics, timestamp=0.0)
+        assert det.get_status()["alert"] is True
+        det.set_mode(SYMMETRY_MODE)
+        status = det.get_status()
+        assert status["alert"] is False
+        assert status["status_message"] == STATUS_NEUTRAL
+
+    def test_baseline_mode_requires_baseline(self):
+        with pytest.raises(ValueError):
+            StrokeDetector(mode=BASELINE_MODE, baseline=None)

@@ -4,10 +4,11 @@ import pytest
 from stroke_detection.metrics import (
     compute_lower_face_asymmetry,
     compute_upper_face_asymmetry,
+    compute_symmetry_ratio,
     compute_all_metrics,
     _point_to_line_distance,
     LEFT_EYE, RIGHT_EYE, MOUTH_LEFT, MOUTH_RIGHT,
-    LEFT_EYEBROW, RIGHT_EYEBROW,
+    LEFT_EYEBROW, RIGHT_EYEBROW, NOSE_TIP,
 )
 
 
@@ -19,6 +20,7 @@ def _symmetric_landmarks() -> dict:
     lm[MOUTH_RIGHT] = (130.0, 160.0, 0.0)
     lm[LEFT_EYEBROW] = (55.0, 80.0, 0.0)
     lm[RIGHT_EYEBROW] = (145.0, 80.0, 0.0)
+    lm[NOSE_TIP] = (100.0, 140.0, 0.0)
     return lm
 
 
@@ -76,7 +78,10 @@ class TestComputeAllMetrics:
     def test_returns_all_keys(self):
         lm = _symmetric_landmarks()
         m = compute_all_metrics(lm)
-        expected_keys = {"lower_face_ratio", "upper_face_ratio"}
+        expected_keys = {
+            "lower_face_ratio", "upper_face_ratio",
+            "lower_symmetry_ratio", "upper_symmetry_ratio",
+        }
         assert set(m.keys()) == expected_keys
 
     def test_symmetric_face_values(self):
@@ -84,3 +89,23 @@ class TestComputeAllMetrics:
         m = compute_all_metrics(lm)
         assert math.isclose(m["lower_face_ratio"], 1.0, rel_tol=1e-4)
         assert math.isclose(m["upper_face_ratio"], 1.0, rel_tol=1e-4)
+
+
+class TestComputeSymmetryRatio:
+    def test_symmetric_face(self):
+        lm = _symmetric_landmarks()
+        result = compute_symmetry_ratio(lm)
+        assert math.isclose(result["lower_symmetry_ratio"], 1.0, rel_tol=1e-4)
+        assert math.isclose(result["upper_symmetry_ratio"], 1.0, rel_tol=1e-4)
+
+    def test_asymmetric_mouth(self):
+        lm = _symmetric_landmarks()
+        lm[MOUTH_LEFT] = (60.0, 180.0, 0.0)
+        result = compute_symmetry_ratio(lm)
+        assert result["lower_symmetry_ratio"] < 1.0
+
+    def test_asymmetric_brow(self):
+        lm = _symmetric_landmarks()
+        lm[LEFT_EYEBROW] = (75.0, 80.0, 0.0)
+        result = compute_symmetry_ratio(lm)
+        assert result["upper_symmetry_ratio"] < 1.0

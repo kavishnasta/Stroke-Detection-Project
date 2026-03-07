@@ -9,28 +9,42 @@ DEFAULT_DEVIATION_THRESHOLD = 0.20
 DEFAULT_ALERT_DURATION_SEC = 2.0
 DEFAULT_SMOOTHING_WINDOW = 45
 DEFAULT_DEBOUNCE_INTERVAL = 2.0
+DEFAULT_SYMMETRY_THRESHOLD = 0.15
 
 STATUS_CALIBRATING = "CALIBRATING"
 STATUS_NEUTRAL = "MONITORING - NEUTRAL"
 STATUS_STROKE = "WARNING: LOWER FACIAL DROOP DETECTED"
 STATUS_PALSY = "WARNING: PERIPHERAL NERVE PALSY SUSPECTED"
 
+BASELINE_MODE = "BASELINE_MODE"
+SYMMETRY_MODE = "SYMMETRY_MODE"
+_VALID_MODES = {BASELINE_MODE, SYMMETRY_MODE}
+
 
 class StrokeDetector:
 
     def __init__(
         self,
-        baseline: Dict[str, Dict[str, float]],
+        baseline: Optional[Dict[str, Dict[str, float]]] = None,
         deviation_threshold: float = DEFAULT_DEVIATION_THRESHOLD,
         alert_duration: float = DEFAULT_ALERT_DURATION_SEC,
         smoothing_window: int = DEFAULT_SMOOTHING_WINDOW,
         debounce_interval: float = DEFAULT_DEBOUNCE_INTERVAL,
+        mode: str = BASELINE_MODE,
+        symmetry_threshold: float = DEFAULT_SYMMETRY_THRESHOLD,
     ) -> None:
+        if mode not in _VALID_MODES:
+            raise ValueError(f"Unknown mode {mode!r}, must be one of {_VALID_MODES}")
+        if mode == BASELINE_MODE and baseline is None:
+            raise ValueError("baseline is required when mode is BASELINE_MODE")
+
+        self.mode = mode
         self.baseline = baseline
         self.deviation_threshold = deviation_threshold
         self.alert_duration = alert_duration
         self.smoothing_window = smoothing_window
         self.debounce_interval = debounce_interval
+        self.symmetry_threshold = symmetry_threshold
 
         self._lower_buffer: collections.deque = collections.deque(maxlen=smoothing_window)
         self._upper_buffer: collections.deque = collections.deque(maxlen=smoothing_window)
@@ -52,6 +66,19 @@ class StrokeDetector:
     ) -> Dict[str, Any]:
         now = timestamp if timestamp is not None else time.monotonic()
 
+        if self.mode == SYMMETRY_MODE:
+            return self._update_symmetry(metrics, now)
+        return self._update_baseline(metrics, now)
+
+    def set_mode(self, mode: str) -> None:
+        if mode not in _VALID_MODES:
+            raise ValueError(f"Unknown mode {mode!r}, must be one of {_VALID_MODES}")
+        self.mode = mode
+        self.reset()
+
+    def _update_baseline(
+        self, metrics: Dict[str, float], now: float
+    ) -> Dict[str, Any]:
         lower_ratio = metrics.get("lower_face_ratio", 1.0)
         upper_ratio = metrics.get("upper_face_ratio", 1.0)
 
@@ -110,6 +137,36 @@ class StrokeDetector:
             if self._current_condition != self._displayed_status:
                 self._displayed_status = self._current_condition
                 self._last_status_change_time = now
+
+        return self.get_status()
+
+    def _update_symmetry(
+        self, metrics: Dict[str, float], now: float
+    ) -> Dict[str, Any]:
+        lower_ratio = metrics.get("lower_symmetry_ratio", 1.0)
+        upper_ratio = metrics.get("upper_symmetry_ratio", 1.0)
+
+        self._smoothed_lower = lower_ratio
+        self._smoothed_upper = upper_ratio
+
+        self._lower_deviation = 1.0 - lower_ratio
+        self._upper_deviation = 1.0 - upper_ratio
+
+        lower_high = self._lower_deviation > self.symmetry_threshold
+        upper_high = self._upper_deviation > self.symmetry_threshold
+
+        if lower_high and not upper_high:
+            self._current_condition = STATUS_STROKE
+            self._alert_active = True
+        elif lower_high and upper_high:
+            self._current_condition = STATUS_PALSY
+            self._alert_active = True
+        else:
+            self._current_condition = STATUS_NEUTRAL
+            self._alert_active = False
+
+        self._alert_sustained_seconds = 0.0
+        self._displayed_status = self._current_condition
 
         return self.get_status()
 
