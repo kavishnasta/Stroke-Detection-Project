@@ -61,8 +61,8 @@ def draw_overlay(frame: np.ndarray, status: dict) -> np.ndarray:
         y += 25
 
     if lower_dev is not None and upper_dev is not None:
-        lower_colour = RED if lower_dev > 0.20 else GREEN
-        upper_colour = RED if upper_dev > 0.20 else GREEN
+        lower_colour = RED if lower_dev > 0.04 else GREEN
+        upper_colour = RED if upper_dev > 0.04 else GREEN
         cv2.putText(overlay, f"Lower face deviation: {lower_dev * 100:.1f}%",
                     (pad, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, lower_colour, 1)
         y += 22
@@ -80,6 +80,10 @@ def main() -> None:
         "--source", default="0",
         help="Webcam index or path to a video file",
     )
+    parser.add_argument(
+        "--static", action="store_true",
+        help="Launch in static mode (bypass calibration, use bilateral symmetry)",
+    )
     args = parser.parse_args()
 
     try:
@@ -92,7 +96,7 @@ def main() -> None:
         print(f"[ERROR] Cannot open video source: {args.source}")
         sys.exit(1)
 
-    api = StrokeDetectionAPI()
+    api = StrokeDetectionAPI(static_mode=args.static)
 
     print("Press 'q' to quit.  Press 'r' to recalibrate.")
 

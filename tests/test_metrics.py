@@ -57,7 +57,7 @@ class TestLowerFaceAsymmetry:
         lm = _symmetric_landmarks()
         lm[MOUTH_LEFT] = (70.0, 180.0, 0.0)
         result = compute_lower_face_asymmetry(lm)
-        assert result["ratio"] < 1.0
+        assert result["ratio"] > 1.0
         assert result["left_dist"] > result["right_dist"]
 
 

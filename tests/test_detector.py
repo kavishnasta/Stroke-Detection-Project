@@ -173,6 +173,6 @@ class TestSymmetryMode:
         assert status["alert"] is False
         assert status["status_message"] == STATUS_NEUTRAL
 
-    def test_baseline_mode_requires_baseline(self):
-        with pytest.raises(ValueError):
-            StrokeDetector(mode=BASELINE_MODE, baseline=None)
+    def test_baseline_mode_accepts_none_baseline(self):
+        det = StrokeDetector(mode=BASELINE_MODE, baseline=None)
+        assert det.baseline is None

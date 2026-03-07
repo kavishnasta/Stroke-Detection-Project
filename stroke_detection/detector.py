@@ -35,8 +35,7 @@ class StrokeDetector:
     ) -> None:
         if mode not in _VALID_MODES:
             raise ValueError(f"Unknown mode {mode!r}, must be one of {_VALID_MODES}")
-        if mode == BASELINE_MODE and baseline is None:
-            raise ValueError("baseline is required when mode is BASELINE_MODE")
+
 
         self.mode = mode
         self.baseline = baseline
@@ -88,22 +87,28 @@ class StrokeDetector:
         self._smoothed_lower = sum(self._lower_buffer) / len(self._lower_buffer)
         self._smoothed_upper = sum(self._upper_buffer) / len(self._upper_buffer)
 
-        lower_mean = self.baseline["lower_face_ratio"]["mean"]
-        upper_mean = self.baseline["upper_face_ratio"]["mean"]
+        if self.baseline is None:
+            lower_high = self._smoothed_lower < 0.85 or self._smoothed_lower > 1.15
+            upper_high = self._smoothed_upper < 0.85 or self._smoothed_upper > 1.15
+            self._lower_deviation = abs(1.0 - self._smoothed_lower)
+            self._upper_deviation = abs(1.0 - self._smoothed_upper)
+        else:
+            lower_mean = self.baseline["lower_face_ratio"]["mean"]
+            upper_mean = self.baseline["upper_face_ratio"]["mean"]
 
-        self._lower_deviation = (
-            abs(self._smoothed_lower - lower_mean) / abs(lower_mean)
-            if lower_mean != 0
-            else abs(self._smoothed_lower - lower_mean)
-        )
-        self._upper_deviation = (
-            abs(self._smoothed_upper - upper_mean) / abs(upper_mean)
-            if upper_mean != 0
-            else abs(self._smoothed_upper - upper_mean)
-        )
+            self._lower_deviation = (
+                abs(self._smoothed_lower - lower_mean) / abs(lower_mean)
+                if lower_mean != 0
+                else abs(self._smoothed_lower - lower_mean)
+            )
+            self._upper_deviation = (
+                abs(self._smoothed_upper - upper_mean) / abs(upper_mean)
+                if upper_mean != 0
+                else abs(self._smoothed_upper - upper_mean)
+            )
 
-        lower_high = self._lower_deviation > self.deviation_threshold
-        upper_high = self._upper_deviation > self.deviation_threshold
+            lower_high = self._lower_deviation > self.deviation_threshold
+            upper_high = self._upper_deviation > self.deviation_threshold
 
         if lower_high and not upper_high:
             new_condition = STATUS_STROKE

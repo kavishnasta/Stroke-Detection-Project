@@ -42,9 +42,7 @@ def compute_lower_face_asymmetry(
     left_dist = _point_to_line_distance(mouth_left, eye_left, eye_right)
     right_dist = _point_to_line_distance(mouth_right, eye_left, eye_right)
 
-    max_dist = max(left_dist, right_dist)
-    min_dist = min(left_dist, right_dist)
-    ratio = (min_dist / max_dist) if max_dist > 0 else 1.0
+    ratio = (left_dist / right_dist) if right_dist > 0 else 1.0
 
     return {
         "left_dist": left_dist,
@@ -64,9 +62,7 @@ def compute_upper_face_asymmetry(
     left_dist = _point_to_line_distance(brow_left, eye_left, eye_right)
     right_dist = _point_to_line_distance(brow_right, eye_left, eye_right)
 
-    max_dist = max(left_dist, right_dist)
-    min_dist = min(left_dist, right_dist)
-    ratio = (min_dist / max_dist) if max_dist > 0 else 1.0
+    ratio = (left_dist / right_dist) if right_dist > 0 else 1.0
 
     return {
         "left_dist": left_dist,

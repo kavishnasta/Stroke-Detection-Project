@@ -7,7 +7,7 @@ import mediapipe as mp
 import numpy as np
 
 from .calibration import Calibrator
-from .detector import StrokeDetector, STATUS_CALIBRATING
+from .detector import StrokeDetector, STATUS_CALIBRATING, STATUS_NEUTRAL
 from .metrics import compute_all_metrics
 
 
@@ -23,12 +23,14 @@ class StrokeDetectionAPI:
         max_num_faces: int = 1,
         min_detection_confidence: float = 0.5,
         min_tracking_confidence: float = 0.5,
+        static_mode: bool = False,
     ) -> None:
         self._calibration_frames = calibration_frames
         self._deviation_threshold = deviation_threshold
         self._alert_duration = alert_duration
         self._smoothing_window = smoothing_window
         self._debounce_interval = debounce_interval
+        self._static_mode = static_mode
 
         self._mp_face_mesh = mp.solutions.face_mesh
         self._face_mesh = self._mp_face_mesh.FaceMesh(
@@ -39,16 +41,33 @@ class StrokeDetectionAPI:
             min_tracking_confidence=min_tracking_confidence,
         )
 
-        self._calibrator = Calibrator(n_frames=calibration_frames)
-        self._detector: Optional[StrokeDetector] = None
-
-        self._last_status: Dict[str, Any] = {
-            "status_message": STATUS_CALIBRATING,
-            "calibrated": False,
-            "frames_remaining": calibration_frames,
-        }
+        if self._static_mode:
+            self._calibrator = None
+            self._detector = StrokeDetector(
+                baseline=None,
+                deviation_threshold=self._deviation_threshold,
+                alert_duration=self._alert_duration,
+                smoothing_window=self._smoothing_window,
+                debounce_interval=self._debounce_interval,
+            )
+            self._last_status: Dict[str, Any] = {
+                "status_message": STATUS_NEUTRAL,
+                "calibrated": True,
+                "frames_remaining": 0,
+            }
+        else:
+            self._calibrator = Calibrator(n_frames=calibration_frames)
+            self._detector: Optional[StrokeDetector] = None
+            self._last_status = {
+                "status_message": STATUS_CALIBRATING,
+                "calibrated": False,
+                "frames_remaining": calibration_frames,
+            }
 
     def calibrate(self, frame: np.ndarray) -> Dict[str, Any]:
+        if self._static_mode:
+            return self.process_frame(frame)
+
         landmarks = self._extract_landmarks(frame)
         if landmarks is None:
             return {
@@ -98,13 +117,27 @@ class StrokeDetectionAPI:
         return dict(self._last_status)
 
     def reset(self) -> None:
-        self._calibrator.reset()
-        self._detector = None
-        self._last_status = {
-            "status_message": STATUS_CALIBRATING,
-            "calibrated": False,
-            "frames_remaining": self._calibration_frames,
-        }
+        if self._static_mode:
+            self._detector = StrokeDetector(
+                baseline=None,
+                deviation_threshold=self._deviation_threshold,
+                alert_duration=self._alert_duration,
+                smoothing_window=self._smoothing_window,
+                debounce_interval=self._debounce_interval,
+            )
+            self._last_status = {
+                "status_message": STATUS_NEUTRAL,
+                "calibrated": True,
+                "frames_remaining": 0,
+            }
+        else:
+            self._calibrator.reset()
+            self._detector = None
+            self._last_status = {
+                "status_message": STATUS_CALIBRATING,
+                "calibrated": False,
+                "frames_remaining": self._calibration_frames,
+            }
 
     def close(self) -> None:
         self._face_mesh.close()
