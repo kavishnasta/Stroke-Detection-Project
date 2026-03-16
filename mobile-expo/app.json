@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Stroke Detection Monitor",
+    "slug": "stroke-detection-monitor",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Camera is used to detect facial asymmetry.",
+        "NSMicrophoneUsageDescription": "Microphone is used to detect speech irregularities."
+      }
+    },
+    "android": {
+      "permissions": ["CAMERA", "RECORD_AUDIO"]
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Camera access is required to detect facial asymmetry."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Microphone access is required to detect speech irregularities."
+        }
+      ]
+    ]
+  }
+}

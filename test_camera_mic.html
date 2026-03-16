@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <meta name="theme-color" content="#dc2626"/>
+  <title>NeuraScan — Stroke Detection</title>
+  <style>
+    :root {
+      --bg:           #fff5f5;
+      --bg2:          #fef2f2;
+      --panel:        #ffffff;
+      --border:       #fecaca;
+      --border-2:     #fca5a5;
+      --accent:       #dc2626;
+      --accent-dk:    #b91c1c;
+      --accent-lt:    #fca5a5;
+      --accent-bg:    #fef2f2;
+      --green:        #16a34a;
+      --green-bg:     #dcfce7;
+      --green-border: #86efac;
+      --yellow:       #d97706;
+      --yellow-bg:    #fef3c7;
+      --yellow-border:#fde68a;
+      --red:          #dc2626;
+      --red-bg:       #fee2e2;
+      --red-border:   #fca5a5;
+      --crimson:      #991b1b;
+      --text:         #1c1917;
+      --text-2:       #57534e;
+      --dim:          #a8a29e;
+      --mono:         'Courier New', monospace;
+      --sh-sm:        0 1px 3px rgba(0,0,0,0.07),0 1px 2px rgba(0,0,0,0.04);
+      --sh-md:        0 4px 8px rgba(0,0,0,0.08),0 2px 4px rgba(0,0,0,0.04);
+      --sh-red:       0 4px 16px rgba(220,38,38,0.22);
+      --r:            14px;
+      --r-sm:         9px;
+      --r-xs:         6px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { -webkit-text-size-adjust: 100%; }
+
+    body {
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse 60% 40% at 15% 5%,  rgba(220,38,38,0.05)  0%, transparent 55%),
+        radial-gradient(ellipse 50% 35% at 85% 95%, rgba(251,113,133,0.07) 0%, transparent 55%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 14px 14px 40px;
+      gap: 12px;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────────── */
+    .header {
+      width: 100%; max-width: 960px;
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px 16px;
+      background: var(--panel);
+      border: 1.5px solid var(--border);
+      border-radius: var(--r);
+      box-shadow: var(--sh-sm);
+      position: sticky; top: 10px; z-index: 100;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .logo-icon {
+      width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--accent), #f87171);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      box-shadow: var(--sh-red);
+    }
+    .logo-text { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+    .logo-text span { color: var(--accent); }
+    .hdr-badges { display: flex; gap: 5px; }
+    .badge {
+      font-size: 9px; font-family: var(--mono); font-weight: 700;
+      padding: 3px 7px; border-radius: 5px; letter-spacing: 1.5px;
+    }
+    .badge-research { background: var(--red-bg); color: var(--accent); border: 1px solid var(--red-border); }
+    .badge-fast {
+      background: linear-gradient(135deg, var(--accent), #f87171);
+      color: #fff;
+    }
+    .conn-status {
+      margin-left: auto; display: flex; align-items: center; gap: 6px;
+      font-size: 11px; font-family: var(--mono); font-weight: 700;
+    }
+    .conn-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--dim);
+      transition: background 0.3s, box-shadow 0.3s;
+      flex-shrink: 0;
+    }
+    .conn-dot.on { background: var(--green); box-shadow: 0 0 0 3px rgba(22,163,74,0.18); animation: conn-pulse 2s infinite; }
+    @keyframes conn-pulse {
+      0%,100% { box-shadow: 0 0 0 3px rgba(22,163,74,0.18); }
+      50%      { box-shadow: 0 0 0 6px rgba(22,163,74,0.05); }
+    }
+    #connLabel { color: var(--dim); transition: color 0.3s; }
+    #connLabel.on { color: var(--green); }
+
+    /* ── Alert Banner ─────────────────────────────────────────────────────── */
+    .alert-banner {
+      width: 100%; max-width: 960px;
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 18px;
+      background: var(--panel);
+      border: 2px solid var(--border);
+      border-radius: var(--r);
+      box-shadow: var(--sh-sm);
+      transition: all 0.35s cubic-bezier(0.4,0,0.2,1);
+    }
+    .alert-banner.lvl-1 {
+      border-color: var(--yellow);
+      background: linear-gradient(135deg,#fffbeb,#fef3c7);
+      box-shadow: 0 4px 16px rgba(217,119,6,0.15);
+    }
+    .alert-banner.lvl-2 {
+      border-color: var(--red);
+      background: linear-gradient(135deg,#fff5f5,#fee2e2);
+      box-shadow: 0 4px 22px rgba(220,38,38,0.22);
+      animation: a-pulse 1.6s ease-in-out infinite;
+    }
+    .alert-banner.lvl-3 {
+      border-color: var(--crimson);
+      background: linear-gradient(135deg,#fef2f2,#fee2e2);
+      box-shadow: 0 6px 28px rgba(153,27,27,0.32);
+      animation: a-pulse-fast 0.85s ease-in-out infinite;
+    }
+    @keyframes a-pulse {
+      0%,100%{box-shadow:0 4px 22px rgba(220,38,38,0.22);}
+      50%     {box-shadow:0 6px 32px rgba(220,38,38,0.40);}
+    }
+    @keyframes a-pulse-fast {
+      0%,100%{box-shadow:0 6px 28px rgba(153,27,27,0.32);}
+      50%     {box-shadow:0 8px 38px rgba(153,27,27,0.55);}
+    }
+    .alert-icon-box {
+      width: 48px; height: 48px; border-radius: 13px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 22px;
+      background: #f5f5f4; transition: background 0.35s;
+    }
+    .lvl-1 .alert-icon-box { background: var(--yellow-bg); }
+    .lvl-2 .alert-icon-box { background: var(--red-bg); }
+    .lvl-3 .alert-icon-box { background: var(--red-bg); animation: icon-shake 0.9s ease-in-out infinite; }
+    @keyframes icon-shake {
+      0%,100%{transform:rotate(0);}  15%{transform:rotate(-9deg);}
+      30%{transform:rotate(9deg);}   50%{transform:rotate(-5deg);}
+      65%{transform:rotate(5deg);}
+    }
+    .alert-text { flex: 1; min-width: 0; }
+    .alert-title { font-weight: 700; font-size: 15px; }
+    .alert-sub   { font-size: 12px; color: var(--text-2); margin-top: 3px; line-height: 1.4; }
+    .alert-badge {
+      font-family: var(--mono); font-size: 10px; font-weight: 700;
+      padding: 5px 12px; border-radius: 20px; letter-spacing: 1.5px;
+      white-space: nowrap; flex-shrink: 0; transition: all 0.35s;
+    }
+    .lvl-0 .alert-badge { background: #f5f5f4; color: var(--dim); }
+    .lvl-1 .alert-badge { background: var(--yellow-bg); color: var(--yellow); border: 1px solid var(--yellow-border); }
+    .lvl-2 .alert-badge { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+    .lvl-3 .alert-badge { background: var(--red); color: #fff; box-shadow: var(--sh-red); }
+
+    /* ── Controls ─────────────────────────────────────────────────────────── */
+    .controls {
+      width: 100%; max-width: 960px;
+      display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;
+    }
+    .ip-wrap { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 150px; }
+    .ip-label { font-size: 10px; color: var(--dim); font-family: var(--mono); font-weight: 700; letter-spacing: 1px; }
+    #serverIp {
+      background: var(--panel); border: 1.5px solid var(--border); border-radius: var(--r-sm);
+      color: var(--text); font-family: var(--mono); font-size: 14px; padding: 11px 13px;
+      width: 100%; outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+      -webkit-appearance: none;
+    }
+    #serverIp:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(220,38,38,0.1); }
+    .btn {
+      min-height: 48px; padding: 0 28px; border-radius: var(--r-sm); border: none;
+      cursor: pointer; font-size: 14px; font-weight: 700; font-family: inherit;
+      transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+      white-space: nowrap; display: flex; align-items: center; gap: 7px;
+      -webkit-tap-highlight-color: transparent; user-select: none;
+    }
+    #startBtn {
+      background: linear-gradient(135deg, var(--accent), #f87171);
+      color: #fff; box-shadow: var(--sh-red);
+    }
+    #startBtn:hover:not(:disabled) {
+      background: linear-gradient(135deg, var(--accent-dk), var(--accent));
+      box-shadow: 0 6px 20px rgba(220,38,38,0.40); transform: translateY(-2px);
+    }
+    #startBtn:active:not(:disabled) { transform: translateY(0); box-shadow: var(--sh-red); }
+    #startBtn:disabled { background: #e7e5e4; color: var(--dim); cursor: default; box-shadow: none; }
+    #stopBtn { background: #1c1917; color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.18); display: none; }
+    #stopBtn:hover { background: #292524; transform: translateY(-2px); }
+
+    /* ── Main Grid ────────────────────────────────────────────────────────── */
+    .main-grid {
+      width: 100%; max-width: 960px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    }
+
+    /* ── Panel base ───────────────────────────────────────────────────────── */
+    .panel {
+      background: var(--panel);
+      border: 1.5px solid var(--border);
+      border-radius: var(--r);
+      box-shadow: var(--sh-sm);
+      overflow: hidden;
+      transition: box-shadow 0.3s, border-color 0.3s;
+    }
+    .panel.alert-glow { border-color: var(--red-border); box-shadow: 0 4px 18px rgba(220,38,38,0.14); }
+    .panel-body { padding: 15px; display: flex; flex-direction: column; gap: 13px; }
+    .panel-hdr  { display: flex; align-items: center; justify-content: space-between; }
+    .sec-label  { font-size: 10px; font-weight: 700; font-family: var(--mono); letter-spacing: 1.5px; color: var(--dim); }
+
+    /* ── Pills ────────────────────────────────────────────────────────────── */
+    .pill {
+      font-size: 10px; font-family: var(--mono); font-weight: 700;
+      padding: 3px 10px; border-radius: 20px; letter-spacing: 0.5px;
+      transition: all 0.3s;
+    }
+    .p-ok    { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+    .p-warn  { background: var(--yellow-bg); color: var(--yellow); border: 1px solid var(--yellow-border); }
+    .p-alert { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+    .p-dim   { background: #f5f5f4; color: var(--dim); }
+
+    /* ── Camera Panel ─────────────────────────────────────────────────────── */
+    .camera-topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .monitor-badge {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 11px; font-family: var(--mono); font-weight: 700; color: var(--dim);
+      transition: color 0.3s;
+    }
+    .monitor-badge.active { color: var(--green); }
+    .monitor-badge.active .hb { animation: heartbeat 1.35s ease-in-out infinite; display: inline-block; }
+    @keyframes heartbeat {
+      0%,100%{transform:scale(1);}  15%{transform:scale(1.18);}
+      28%{transform:scale(1);}      42%{transform:scale(1.12);}
+      60%{transform:scale(1);}
+    }
+    video {
+      width: 100%; display: block; background: #1c1917;
+      min-height: 180px; max-height: 300px; object-fit: cover;
+    }
+    .cam-overlay {
+      padding: 10px 14px;
+      display: flex; align-items: center; gap: 8px;
+      background: linear-gradient(transparent,rgba(0,0,0,0.75));
+      position: absolute; bottom: 0; left: 0; right: 0;
+    }
+    .rec-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dim); transition: background 0.3s; flex-shrink: 0; }
+    .rec-dot.live { background: #f87171; animation: blink 1s ease-in-out infinite; box-shadow: 0 0 7px rgba(248,113,113,0.65); }
+    @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.25;} }
+    .rec-lbl { font-size: 11px; font-family: var(--mono); font-weight: 700; color: #fff; letter-spacing: 1.5px; }
+    .fps-lbl { margin-left: auto; font-size: 11px; font-family: var(--mono); color: rgba(255,255,255,0.45); }
+    .camera-inner { position: relative; }
+
+    /* ── Waveform ─────────────────────────────────────────────────────────── */
+    #waveCanvas {
+      width: 100%; height: 70px; display: block; border-radius: var(--r-xs);
+      background: #1c1917;
+    }
+    .metrics-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .m-box {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 10px 12px;
+    }
+    .m-lbl { font-size: 9px; font-family: var(--mono); font-weight: 700; color: var(--dim); letter-spacing: 1px; }
+    .m-val { font-size: 18px; font-weight: 800; font-family: var(--mono); margin-top: 3px; transition: color 0.3s; }
+    .m-sub { font-size: 9px; color: var(--dim); margin-top: 1px; }
+    .m-bar { height: 4px; background: #e7e5e4; border-radius: 2px; margin-top: 7px; overflow: hidden; }
+    .m-bar-fill { height: 100%; border-radius: 2px; transition: width 0.55s cubic-bezier(0.4,0,0.2,1), background 0.35s; }
+
+    /* Voice status row */
+    .vs-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .vs-text { font-size: 16px; font-weight: 800; font-family: var(--mono); transition: color 0.3s; }
+    .conf-wrap { display: flex; flex-direction: column; gap: 5px; }
+    .conf-row { display: flex; justify-content: space-between; font-size: 10px; font-family: var(--mono); font-weight: 700; color: var(--dim); }
+    .conf-track { height: 7px; background: #e7e5e4; border-radius: 4px; overflow: hidden; }
+    .conf-fill { height: 100%; border-radius: 4px; transition: width 0.65s cubic-bezier(0.4,0,0.2,1), background 0.4s; }
+
+    /* ── Face Panel ───────────────────────────────────────────────────────── */
+    .face-msg {
+      font-size: 12px; font-family: var(--mono); color: var(--text-2);
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--r-xs); padding: 8px 12px; min-height: 36px;
+      transition: all 0.3s; line-height: 1.5;
+    }
+    .ratio-row  { display: flex; flex-direction: column; gap: 6px; }
+    .ratio-hdr  { display: flex; justify-content: space-between; align-items: center; }
+    .ratio-lbl  { font-size: 11px; color: var(--dim); font-weight: 600; }
+    .ratio-nums { display: flex; align-items: center; gap: 5px; }
+    .ratio-val  { font-size: 17px; font-weight: 800; font-family: var(--mono); transition: color 0.3s; }
+    .ratio-tag  { font-size: 10px; font-family: var(--mono); font-weight: 700; }
+    .ratio-track {
+      height: 9px; background: #e7e5e4; border-radius: 5px; position: relative; overflow: hidden;
+    }
+    .ratio-fill { height: 100%; border-radius: 5px; transition: width 0.45s cubic-bezier(0.4,0,0.2,1), background 0.3s; }
+    .ratio-nzone { position: absolute; top:0; bottom:0; left:42.5%; width:15%; background:rgba(22,163,74,0.18); border-radius:2px; }
+    .ratio-center{ position: absolute; top:0; bottom:0; left:calc(50% - 1px); width:2px; background:rgba(0,0,0,0.12); }
+
+    .divider { height: 1px; background: var(--border); }
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .st-item { display: flex; flex-direction: column; gap: 3px; }
+    .st-lbl  { font-size: 9px; color: var(--dim); font-family: var(--mono); font-weight: 700; letter-spacing: 1px; }
+    .st-val  { font-size: 13px; font-weight: 700; font-family: var(--mono); transition: color 0.3s; }
+
+    /* ── NIHSS Panel ──────────────────────────────────────────────────────── */
+    .nihss-note {
+      font-size: 11px; color: var(--text-2); line-height: 1.65;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--r-xs); padding: 10px 13px;
+    }
+
+    /* ── Event Log ────────────────────────────────────────────────────────── */
+    .log-panel {
+      width: 100%; max-width: 960px;
+      background: var(--panel); border: 1.5px solid var(--border);
+      border-radius: var(--r); padding: 14px 16px; box-shadow: var(--sh-sm);
+    }
+    .log-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .log-clear {
+      font-size: 10px; color: var(--dim); font-family: var(--mono); font-weight: 700;
+      cursor: pointer; letter-spacing: 0.5px; transition: color 0.2s; padding: 2px 5px;
+    }
+    .log-clear:hover { color: var(--accent); }
+    #logEl {
+      max-height: 100px; overflow-y: auto; font-family: var(--mono);
+      font-size: 11px; display: flex; flex-direction: column; gap: 3px;
+    }
+    #logEl::-webkit-scrollbar { width: 4px; }
+    #logEl::-webkit-scrollbar-track { background: transparent; }
+    #logEl::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
+    .ll { display: flex; gap: 10px; padding: 1px 0; }
+    .lt { color: var(--dim); min-width: 65px; flex-shrink: 0; }
+    .lm { color: var(--text-2); }
+    .l-ok   .lm { color: var(--green); }
+    .l-warn .lm { color: var(--yellow); }
+    .l-err  .lm { color: var(--red); }
+    .l-info .lm { color: #6366f1; }
+
+    /* ── Disclaimer ───────────────────────────────────────────────────────── */
+    .disclaimer {
+      width: 100%; max-width: 960px; padding: 10px 16px;
+      background: var(--yellow-bg); border: 1px solid var(--yellow-border);
+      border-radius: var(--r-sm); font-size: 11px; color: #92400e;
+      text-align: center; line-height: 1.55;
+    }
+
+    /* ── Emergency body flash ─────────────────────────────────────────────── */
+    body.emergency { animation: e-flash 0.9s ease-in-out infinite; }
+    @keyframes e-flash { 0%,100%{background-color:var(--bg);} 50%{background-color:#ffe4e4;} }
+
+    /* ── Responsive ───────────────────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      body { padding: 10px 10px 32px; gap: 10px; }
+      .main-grid { grid-template-columns: 1fr; }
+      .header { padding: 9px 12px; top: 8px; }
+      .logo-text { font-size: 18px; }
+      .hdr-badges { display: none; }
+      .alert-banner { padding: 12px 13px; }
+      .alert-title { font-size: 14px; }
+      .alert-sub { font-size: 11px; }
+      .controls { flex-direction: column; }
+      .btn { width: 100%; justify-content: center; }
+      .ip-wrap { min-width: unset; width: 100%; }
+      #serverIp { font-size: 16px; } /* prevent iOS zoom-in */
+      video { min-height: 200px; max-height: none; }
+    }
+
+    @media (min-width: 601px) and (max-width: 768px) {
+      .main-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (min-width: 769px) {
+      .main-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ────────────────────────────────────────────────────────────── -->
+  <header class="header">
+    <div class="logo-icon">🧠</div>
+    <div class="logo-text">Neura<span>Scan</span></div>
+    <div class="hdr-badges">
+      <div class="badge badge-research">RESEARCH</div>
+      <div class="badge badge-fast">F·A·S·T</div>
+    </div>
+    <div class="conn-status">
+      <div class="conn-dot" id="connDot"></div>
+      <span id="connLabel">OFFLINE</span>
+    </div>
+  </header>
+
+  <!-- ── Alert Banner ───────────────────────────────────────────────────────── -->
+  <div class="alert-banner lvl-0" id="alertBanner">
+    <div class="alert-icon-box"><span id="alertIcon">💤</span></div>
+    <div class="alert-text">
+      <div class="alert-title" id="alertTitle">System Idle</div>
+      <div class="alert-sub"  id="alertSub">Start monitoring to begin stroke detection analysis</div>
+    </div>
+    <div class="alert-badge" id="alertBadge">LEVEL 0</div>
+  </div>
+
+  <!-- ── Controls ───────────────────────────────────────────────────────────── -->
+  <div class="controls">
+    <div class="ip-wrap">
+      <div class="ip-label">BACKEND SERVER IP</div>
+      <input id="serverIp" type="text" value="localhost"
+             placeholder="localhost or 192.168.x.x"
+             inputmode="url" autocorrect="off" autocapitalize="none" spellcheck="false"/>
+    </div>
+    <button id="startBtn" class="btn">▶ &nbsp;Start Monitoring</button>
+    <button id="stopBtn"  class="btn">■ &nbsp;Stop</button>
+  </div>
+
+  <!-- ── Main Grid ──────────────────────────────────────────────────────────── -->
+  <div class="main-grid">
+
+    <!-- Camera -->
+    <div class="panel" id="camPanel">
+      <div class="camera-topbar">
+        <div class="sec-label">LIVE CAMERA</div>
+        <div class="monitor-badge" id="monBadge">
+          <span class="hb">🤍</span><span id="monLabel">STANDBY</span>
+        </div>
+      </div>
+      <div class="camera-inner">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="cam-overlay">
+          <div class="rec-dot" id="recDot"></div>
+          <span class="rec-lbl" id="recLabel">STANDBY</span>
+          <span class="fps-lbl" id="fpsLabel">— fps</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Voice / Waveform -->
+    <div class="panel">
+      <div class="panel-body">
+        <div class="panel-hdr">
+          <div class="sec-label">VOICE ANALYSIS</div>
+          <div class="pill p-dim" id="voicePill">WAITING</div>
+        </div>
+
+        <canvas id="waveCanvas"></canvas>
+
+        <div class="metrics-2col">
+          <div class="m-box">
+            <div class="m-lbl">JITTER (PERIOD)</div>
+            <div class="m-val" id="jitterVal">—</div>
+            <div class="m-sub">Normal &lt; 1.0%</div>
+            <div class="m-bar"><div class="m-bar-fill" id="jitterBar" style="width:0%"></div></div>
+          </div>
+          <div class="m-box">
+            <div class="m-lbl">SHIMMER (LOCAL)</div>
+            <div class="m-val" id="shimmerVal">—</div>
+            <div class="m-sub">Normal &lt; 3.81%</div>
+            <div class="m-bar"><div class="m-bar-fill" id="shimmerBar" style="width:0%"></div></div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="vs-row">
+          <div class="vs-text" id="voiceStatus">—</div>
+          <div class="pill p-dim" id="voiceStatusPill">WAITING</div>
+        </div>
+        <div class="conf-wrap">
+          <div class="conf-row"><span>CONFIDENCE</span><span id="voiceConfPct">—</span></div>
+          <div class="conf-track">
+            <div class="conf-fill" id="voiceConfBar" style="width:0%;background:var(--dim)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Face Analysis -->
+    <div class="panel" id="facePanel">
+      <div class="panel-body">
+        <div class="panel-hdr">
+          <div class="sec-label">FACIAL ANALYSIS</div>
+          <div class="pill p-dim" id="facePill">WAITING</div>
+        </div>
+
+        <div class="face-msg" id="faceMsg">—</div>
+
+        <!-- Lower face -->
+        <div class="ratio-row">
+          <div class="ratio-hdr">
+            <span class="ratio-lbl">LOWER FACE · Mouth / Nasolabial</span>
+            <div class="ratio-nums">
+              <span class="ratio-val" id="lowerVal" style="color:var(--dim)">—</span>
+              <span class="ratio-tag" id="lowerTag" style="color:var(--dim)">—</span>
+            </div>
+          </div>
+          <div class="ratio-track">
+            <div class="ratio-nzone"></div>
+            <div class="ratio-center"></div>
+            <div class="ratio-fill" id="lowerFill" style="width:50%;background:var(--dim)"></div>
+          </div>
+        </div>
+
+        <!-- Upper face -->
+        <div class="ratio-row">
+          <div class="ratio-hdr">
+            <span class="ratio-lbl">UPPER FACE · Brow / Forehead</span>
+            <div class="ratio-nums">
+              <span class="ratio-val" id="upperVal" style="color:var(--dim)">—</span>
+              <span class="ratio-tag" id="upperTag" style="color:var(--dim)">—</span>
+            </div>
+          </div>
+          <div class="ratio-track">
+            <div class="ratio-nzone"></div>
+            <div class="ratio-center"></div>
+            <div class="ratio-fill" id="upperFill" style="width:50%;background:var(--dim)"></div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="stats-grid">
+          <div class="st-item"><div class="st-lbl">LOWER DEVIATION</div><div class="st-val" id="lowerDev">—</div></div>
+          <div class="st-item"><div class="st-lbl">UPPER DEVIATION</div><div class="st-val" id="upperDev">—</div></div>
+          <div class="st-item"><div class="st-lbl">ALERT THRESHOLD</div><div class="st-val" style="color:var(--dim)">3.0 s</div></div>
+          <div class="st-item"><div class="st-lbl">PATTERN</div><div class="st-val" id="facePattern">—</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NIHSS Speech Panel -->
+    <div class="panel">
+      <div class="panel-body">
+        <div class="panel-hdr">
+          <div class="sec-label">NIHSS SPEECH SCREEN</div>
+          <div class="pill p-dim" id="nihssPill">NOT SCORING</div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="st-item"><div class="st-lbl">DYSARTHRIA (NIHSS 10)</div><div class="st-val" id="nihssScore">—</div></div>
+          <div class="st-item"><div class="st-lbl">CLASSIFICATION</div><div class="st-val" id="nihssClass">—</div></div>
+          <div class="st-item"><div class="st-lbl">JITTER THRESHOLD</div><div class="st-val" style="color:var(--dim)">1.0%</div></div>
+          <div class="st-item"><div class="st-lbl">SHIMMER THRESHOLD</div><div class="st-val" style="color:var(--dim)">3.81%</div></div>
+          <div class="st-item"><div class="st-lbl">MIN AUDIO SAMPLE</div><div class="st-val" style="color:var(--dim)">3.0 s</div></div>
+          <div class="st-item"><div class="st-lbl">CONF. GATE</div><div class="st-val" style="color:var(--dim)">≥ 65%</div></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="nihss-note" id="nihssNote">
+          Waiting for 3 s audio accumulation before scoring.<br>
+          Both jitter AND shimmer must exceed thresholds for pathological classification.
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main-grid -->
+
+  <!-- ── Event Log ──────────────────────────────────────────────────────────── -->
+  <div class="log-panel">
+    <div class="log-hdr">
+      <div class="sec-label">EVENT LOG</div>
+      <div class="log-clear" onclick="document.getElementById('logEl').innerHTML=''">CLEAR</div>
+    </div>
+    <div id="logEl"></div>
+  </div>
+
+  <!-- ── Disclaimer ─────────────────────────────────────────────────────────── -->
+  <div class="disclaimer">
+    ⚠ Research prototype only — not a certified medical device.
+    All detections require clinical NIHSS assessment by a licensed neurologist or emergency physician.
+  </div>
+
+  <canvas id="canvas" style="display:none"></canvas>
+
+  <script>
+    // ── DOM refs ──────────────────────────────────────────────────────────────
+    const video    = document.getElementById('video');
+    const canvas   = document.getElementById('canvas');
+    const ctx      = canvas.getContext('2d');
+    const waveCV   = document.getElementById('waveCanvas');
+    const waveCtx  = waveCV.getContext('2d');
+
+    const alertBanner = document.getElementById('alertBanner');
+    const alertIcon   = document.getElementById('alertIcon');
+    const alertTitle  = document.getElementById('alertTitle');
+    const alertSub    = document.getElementById('alertSub');
+    const alertBadge  = document.getElementById('alertBadge');
+
+    const connDot    = document.getElementById('connDot');
+    const connLabel  = document.getElementById('connLabel');
+    const recDot     = document.getElementById('recDot');
+    const recLabel   = document.getElementById('recLabel');
+    const fpsLabel   = document.getElementById('fpsLabel');
+    const monBadge   = document.getElementById('monBadge');
+    const monLabel   = document.getElementById('monLabel');
+
+    const facePill   = document.getElementById('facePill');
+    const faceMsg    = document.getElementById('faceMsg');
+    const lowerVal   = document.getElementById('lowerVal');
+    const lowerTag   = document.getElementById('lowerTag');
+    const lowerFill  = document.getElementById('lowerFill');
+    const upperVal   = document.getElementById('upperVal');
+    const upperTag   = document.getElementById('upperTag');
+    const upperFill  = document.getElementById('upperFill');
+    const lowerDev   = document.getElementById('lowerDev');
+    const upperDev   = document.getElementById('upperDev');
+    const facePattern= document.getElementById('facePattern');
+
+    const voicePill    = document.getElementById('voicePill');
+    const jitterVal    = document.getElementById('jitterVal');
+    const shimmerVal   = document.getElementById('shimmerVal');
+    const jitterBar    = document.getElementById('jitterBar');
+    const shimmerBar   = document.getElementById('shimmerBar');
+    const voiceStatus  = document.getElementById('voiceStatus');
+    const voiceStatusPill = document.getElementById('voiceStatusPill');
+    const voiceConfPct = document.getElementById('voiceConfPct');
+    const voiceConfBar = document.getElementById('voiceConfBar');
+
+    const nihssPill  = document.getElementById('nihssPill');
+    const nihssScore = document.getElementById('nihssScore');
+    const nihssClass = document.getElementById('nihssClass');
+    const nihssNote  = document.getElementById('nihssNote');
+
+    const startBtn  = document.getElementById('startBtn');
+    const stopBtn   = document.getElementById('stopBtn');
+    const logEl     = document.getElementById('logEl');
+
+    // ── State ──────────────────────────────────────────────────────────────
+    let mediaStream, ws, audioCtx, processor, running = false, frameTimer;
+    let latestAudio = '', frameCount = 0, lastFpsTs = Date.now(), curAlertLevel = 0;
+    const TARGET_SR = 16000;
+    let pcmBuffer = [];
+    let waveData  = new Float32Array(0);
+
+    // ── Logging ────────────────────────────────────────────────────────────
+    function log(msg, cls = '') {
+      const t = new Date().toTimeString().slice(0,8);
+      const row = document.createElement('div');
+      row.className = 'll ' + cls;
+      row.innerHTML = `<span class="lt">${t}</span><span class="lm">${msg}</span>`;
+      logEl.appendChild(row);
+      logEl.scrollTop = logEl.scrollHeight;
+      while (logEl.children.length > 80) logEl.removeChild(logEl.firstChild);
+    }
+
+    // ── Connection ─────────────────────────────────────────────────────────
+    function setConn(on) {
+      connDot.className = 'conn-dot' + (on ? ' on' : '');
+      connLabel.textContent = on ? 'CONNECTED' : 'OFFLINE';
+      connLabel.className = on ? 'on' : '';
+    }
+
+    // ── Alert system ────────────────────────────────────────────────────────
+    const ALERT_CFG = {
+      0: { cls:'lvl-0', icon:'💚', title:'No Stroke Indicators', sub:'All parameters within normal range', badge:'LEVEL 0 — NORMAL' },
+      1: { cls:'lvl-1', icon:'🟡', title:'Warning — Single Marker Detected', sub:'Face or speech abnormality observed. Continue monitoring.', badge:'LEVEL 1 — WARNING' },
+      2: { cls:'lvl-2', icon:'🔴', title:'Alert — Multiple Markers Active', sub:'Face AND speech abnormalities detected. Seek clinical assessment immediately.', badge:'LEVEL 2 — ALERT' },
+      3: { cls:'lvl-3', icon:'🚨', title:'EMERGENCY — High-Confidence Stroke Signs', sub:'FAST positive: facial droop + severe dysarthria. Call emergency services NOW.', badge:'LEVEL 3 — EMERGENCY' },
+    };
+
+    function setAlertLevel(lvl) {
+      curAlertLevel = Math.min(lvl, 3);
+      const cfg = ALERT_CFG[curAlertLevel];
+      alertBanner.className = 'alert-banner ' + cfg.cls;
+      alertIcon.textContent = cfg.icon;
+      alertTitle.textContent = cfg.title;
+      alertSub.textContent = cfg.sub;
+      alertBadge.textContent = cfg.badge;
+      document.body.classList.toggle('emergency', curAlertLevel === 3);
+    }
+
+    // ── Ratio bar ───────────────────────────────────────────────────────────
+    function updateRatio(fillEl, valEl, tagEl, ratio) {
+      const pct = Math.min(100, Math.max(0, ratio * 50));
+      const ok  = ratio >= 0.85 && ratio <= 1.15;
+      const col = ok ? 'var(--green)' : 'var(--red)';
+      fillEl.style.width = pct + '%';
+      fillEl.style.background = col;
+      valEl.textContent = ratio.toFixed(3);
+      valEl.style.color = col;
+      tagEl.textContent = ok ? '✓ OK' : '✗ ASYM';
+      tagEl.style.color = col;
+    }
+
+    // ── Metric bar ──────────────────────────────────────────────────────────
+    function updateMetric(barEl, valEl, value, normalMax, severeThresh) {
+      const pct = Math.min(100, (value / (severeThresh * 1.6)) * 100);
+      const ok  = value <= normalMax;
+      const bad = value >  severeThresh;
+      const col = ok ? 'var(--green)' : bad ? 'var(--red)' : 'var(--yellow)';
+      barEl.style.width = pct + '%';
+      barEl.style.background = col;
+      valEl.textContent = (value * 100).toFixed(3) + '%';
+      valEl.style.color = col;
+    }
+
+    // ── Waveform ────────────────────────────────────────────────────────────
+    function drawWave(samples) {
+      const W = waveCV.offsetWidth  || 320;
+      const H = waveCV.offsetHeight || 70;
+      waveCV.width = W; waveCV.height = H;
+
+      // Background
+      waveCtx.fillStyle = '#1c1917';
+      waveCtx.fillRect(0, 0, W, H);
+
+      // Subtle grid
+      waveCtx.strokeStyle = 'rgba(255,255,255,0.05)';
+      waveCtx.lineWidth = 1;
+      for (let i = 1; i < 4; i++) {
+        const y = (H / 4) * i;
+        waveCtx.beginPath(); waveCtx.moveTo(0, y); waveCtx.lineTo(W, y); waveCtx.stroke();
+      }
+
+      if (!samples || samples.length < 2) return;
+
+      // Wave color based on alert level
+      const waveColors = ['#f87171','#f87171','#ef4444','#dc2626'];
+      const wc = waveColors[curAlertLevel] || '#f87171';
+
+      const step = Math.max(1, Math.floor(samples.length / W));
+
+      // Gradient fill
+      const grad = waveCtx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, wc + '50');
+      grad.addColorStop(1, wc + '08');
+      waveCtx.beginPath();
+      waveCtx.moveTo(0, H);
+      for (let x = 0; x < W; x++) {
+        const s = samples[Math.min(Math.floor(x * step), samples.length - 1)] || 0;
+        waveCtx.lineTo(x, (H / 2) + s * (H / 2) * 0.85);
+      }
+      waveCtx.lineTo(W, H);
+      waveCtx.closePath();
+      waveCtx.fillStyle = grad;
+      waveCtx.fill();
+
+      // Line
+      waveCtx.beginPath();
+      waveCtx.strokeStyle = wc;
+      waveCtx.lineWidth = 1.5;
+      for (let x = 0; x < W; x++) {
+        const s = samples[Math.min(Math.floor(x * step), samples.length - 1)] || 0;
+        const y = (H / 2) + s * (H / 2) * 0.85;
+        x === 0 ? waveCtx.moveTo(x, y) : waveCtx.lineTo(x, y);
+      }
+      waveCtx.stroke();
+    }
+
+    // ── Full UI update ─────────────────────────────────────────────────────
+    function updateUI(d) {
+      const lvl = d.alert_level ?? (d.alert_active ? 2 : 0);
+      setAlertLevel(lvl);
+
+      // Face
+      const lower = d.face_ratios?.lower ?? 1.0;
+      const upper = d.face_ratios?.upper ?? 1.0;
+      updateRatio(lowerFill, lowerVal, lowerTag, lower);
+      updateRatio(upperFill, upperVal, upperTag, upper);
+
+      const fmsg = d.face_status || '—';
+      faceMsg.textContent = fmsg;
+
+      if (d.alert_face) {
+        const lBad = lower < 0.85 || lower > 1.15;
+        const uBad = upper < 0.85 || upper > 1.15;
+        facePill.className  = 'pill p-alert';
+        facePill.textContent = 'ASYMMETRY';
+        facePattern.textContent = lBad && !uBad ? 'CENTRAL (STROKE)' : lBad && uBad ? 'PERIPHERAL' : 'ASYMMETRIC';
+        facePattern.style.color = lBad && !uBad ? 'var(--red)' : 'var(--yellow)';
+      } else if (fmsg.includes('No Face')) {
+        facePill.className = 'pill p-dim'; facePill.textContent = 'NO FACE';
+        facePattern.textContent = '—'; facePattern.style.color = 'var(--dim)';
+      } else {
+        facePill.className = 'pill p-ok'; facePill.textContent = 'SYMMETRIC';
+        facePattern.textContent = 'NORMAL'; facePattern.style.color = 'var(--green)';
+      }
+
+      lowerDev.textContent = ((Math.abs(1.0 - lower)) * 100).toFixed(1) + '%';
+      upperDev.textContent = ((Math.abs(1.0 - upper)) * 100).toFixed(1) + '%';
+      lowerDev.style.color = (lower < 0.85 || lower > 1.15) ? 'var(--red)' : 'var(--green)';
+      upperDev.style.color = (upper < 0.85 || upper > 1.15) ? 'var(--red)' : 'var(--green)';
+
+      // Voice
+      const jit  = d.voice_jitter    ?? 0;
+      const shim = d.voice_shimmer   ?? 0;
+      const conf = d.voice_confidence ?? 0;
+      const vs   = d.voice_status    || '—';
+
+      updateMetric(jitterBar,  jitterVal,  jit,  0.010, 0.015);
+      updateMetric(shimmerBar, shimmerVal, shim, 0.038, 0.060);
+
+      voiceStatus.textContent = vs;
+      const vOk   = vs === 'Normal' || vs === '—' || vs === 'No Speech' || vs === 'Insufficient Data';
+      const vMild = vs.includes('Mild');
+      const vSev  = vs.includes('Severe');
+      const vCol  = vOk ? 'var(--green)' : vMild ? 'var(--yellow)' : 'var(--red)';
+      voiceStatus.style.color = vCol;
+
+      if (vs === 'Normal') {
+        voicePill.className = 'pill p-ok'; voicePill.textContent = 'NORMAL';
+        voiceStatusPill.className = 'pill p-ok'; voiceStatusPill.textContent = 'NORMAL';
+      } else if (vMild) {
+        voicePill.className = 'pill p-warn'; voicePill.textContent = 'MILD';
+        voiceStatusPill.className = 'pill p-warn'; voiceStatusPill.textContent = 'MILD DYSARTHRIA';
+      } else if (vSev) {
+        voicePill.className = 'pill p-alert'; voicePill.textContent = 'SEVERE';
+        voiceStatusPill.className = 'pill p-alert'; voiceStatusPill.textContent = 'SEVERE';
+      } else {
+        voicePill.className = 'pill p-dim'; voicePill.textContent = 'WAITING';
+        voiceStatusPill.className = 'pill p-dim'; voiceStatusPill.textContent = 'WAITING';
+      }
+
+      voiceConfPct.textContent   = (conf * 100).toFixed(0) + '%';
+      voiceConfBar.style.width   = (conf * 100) + '%';
+      voiceConfBar.style.background = conf >= 0.80 ? 'var(--green)' : conf >= 0.55 ? 'var(--yellow)' : 'var(--dim)';
+
+      // NIHSS
+      let nihss = 0, nihssCls = 'Normal articulation';
+      if (vMild) { nihss = 1; nihssCls = 'Mild-moderate slurring'; }
+      if (vSev)  { nihss = 2; nihssCls = 'Severe slurring / mute'; }
+      nihssScore.textContent = nihss + ' / 2';
+      nihssScore.style.color = nihss === 0 ? 'var(--green)' : nihss === 1 ? 'var(--yellow)' : 'var(--red)';
+      nihssClass.textContent = nihssCls;
+      nihssClass.style.color = nihssScore.style.color;
+      nihssPill.className   = 'pill ' + (nihss === 0 ? 'p-ok' : nihss === 1 ? 'p-warn' : 'p-alert');
+      nihssPill.textContent = `NIHSS 10: ${nihss}`;
+
+      nihssNote.innerHTML = (vs === '—' || vs === 'Insufficient Data' || vs === 'No Speech')
+        ? 'Waiting for 3 s audio accumulation before scoring.<br>Both jitter AND shimmer must exceed thresholds.'
+        : `Jitter: <b style="color:${jitterVal.style.color}">${(jit*100).toFixed(3)}%</b>
+           &nbsp; Shimmer: <b style="color:${shimmerVal.style.color}">${(shim*100).toFixed(3)}%</b><br>
+           Confidence gate (65%): ${conf >= 0.65 ? '<b style="color:var(--green)">✓ PASSED</b>' : '<b style="color:var(--red)">✗ BELOW GATE</b>'}`;
+
+      // Log on escalation
+      if (lvl >= 2) log(`Alert level ${lvl} — ${alertTitle.textContent}`, 'l-err');
+      else if (lvl === 1) log(`Warning: ${d.face_status || vs}`, 'l-warn');
+    }
+
+    // ── WAV encoder ────────────────────────────────────────────────────────
+    function encodeWAV(samples) {
+      const buf = new ArrayBuffer(44 + samples.length * 2);
+      const v   = new DataView(buf);
+      const wr  = (o, s) => { for (let i=0;i<s.length;i++) v.setUint8(o+i,s.charCodeAt(i)); };
+      wr(0,'RIFF'); v.setUint32(4, 36+samples.length*2, true);
+      wr(8,'WAVE'); wr(12,'fmt '); v.setUint32(16,16,true);
+      v.setUint16(20,1,true); v.setUint16(22,1,true);
+      v.setUint32(24,TARGET_SR,true); v.setUint32(28,TARGET_SR*2,true);
+      v.setUint16(32,2,true); v.setUint16(34,16,true);
+      wr(36,'data'); v.setUint32(40,samples.length*2,true);
+      for (let i=0;i<samples.length;i++) {
+        const s = Math.max(-1, Math.min(1, samples[i]));
+        v.setInt16(44+i*2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      }
+      return buf;
+    }
+    function bufToB64(buf) {
+      const b = new Uint8Array(buf); let s = '';
+      for (let i=0;i<b.length;i++) s += String.fromCharCode(b[i]);
+      return btoa(s);
+    }
+
+    // ── Audio capture ───────────────────────────────────────────────────────
+    function startAudio(stream) {
+      audioCtx  = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+      const src = audioCtx.createMediaStreamSource(stream);
+      processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      const ratio = audioCtx.sampleRate / TARGET_SR;
+
+      processor.onaudioprocess = (e) => {
+        if (!running) return;
+        const input = e.inputBuffer.getChannelData(0);
+
+        // Downsample to 16 kHz
+        const ds = [];
+        for (let i = 0; i < Math.floor(input.length / ratio); i++) ds.push(input[Math.round(i * ratio)]);
+        pcmBuffer.push(...ds);
+
+        waveData = input;
+        drawWave(waveData);
+
+        if (pcmBuffer.length >= TARGET_SR * 1.5) {
+          const chunk = pcmBuffer.splice(0, TARGET_SR * 1.5);
+          latestAudio = bufToB64(encodeWAV(new Float32Array(chunk)));
+        }
+      };
+      src.connect(processor);
+      processor.connect(audioCtx.destination);
+    }
+
+    // ── Frame capture ───────────────────────────────────────────────────────
+    function captureFrame() {
+      if (!running || !ws || ws.readyState !== WebSocket.OPEN) return;
+      canvas.width  = video.videoWidth  || 320;
+      canvas.height = video.videoHeight || 240;
+      ctx.drawImage(video, 0, 0);
+      const b64 = canvas.toDataURL('image/jpeg', 0.35).split(',')[1];
+      ws.send(JSON.stringify({ video_frame: b64, audio_chunk: latestAudio }));
+      latestAudio = '';
+
+      frameCount++;
+      const now = Date.now();
+      if (now - lastFpsTs >= 1000) {
+        fpsLabel.textContent = frameCount + ' fps';
+        frameCount = 0; lastFpsTs = now;
+      }
+    }
+
+    // ── Start ────────────────────────────────────────────────────────────────
+    async function start() {
+      startBtn.disabled = true;
+      log('Requesting camera + microphone…', 'l-info');
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode:'user', width:640, height:480 },
+          audio: { sampleRate:48000, channelCount:1, echoCancellation:false, noiseSuppression:false }
+        });
+        video.srcObject = mediaStream;
+        log('Camera + mic permission granted', 'l-ok');
+      } catch(e) {
+        log('Permission denied: ' + e.message, 'l-err');
+        startBtn.disabled = false;
+        return;
+      }
+
+      running = true;
+      startBtn.style.display = 'none';
+      stopBtn.style.display  = '';
+      recDot.classList.add('live');
+      recLabel.textContent = 'RECORDING';
+      monBadge.classList.add('active');
+      monLabel.textContent = 'MONITORING';
+      setAlertLevel(0);
+
+      const ip = document.getElementById('serverIp').value.trim();
+      ws = new WebSocket(`ws://${ip}:8000/stream`);
+
+      ws.onopen = () => {
+        setConn(true);
+        log('WebSocket connected → ws://' + ip + ':8000/stream', 'l-ok');
+        alertTitle.textContent = 'Connected — Analyzing…';
+        alertSub.textContent   = 'Waiting for 3 s audio buffer and face detection';
+      };
+      ws.onclose = () => {
+        setConn(false);
+        log('WebSocket disconnected', 'l-err');
+        if (running) stop();
+      };
+      ws.onerror = () => log('WebSocket error', 'l-err');
+      ws.onmessage = (e) => { try { updateUI(JSON.parse(e.data)); } catch(_) {} };
+
+      startAudio(mediaStream);
+      frameTimer = setInterval(captureFrame, 83);
+    }
+
+    // ── Stop ─────────────────────────────────────────────────────────────────
+    function stop() {
+      running = false;
+      clearInterval(frameTimer);
+      if (processor)    { processor.disconnect(); processor = null; }
+      if (audioCtx)     { audioCtx.close();       audioCtx  = null; }
+      if (mediaStream)  { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+      if (ws)           { ws.close(); ws = null; }
+      video.srcObject = null;
+      pcmBuffer = []; latestAudio = ''; curAlertLevel = 0;
+      setConn(false);
+      recDot.classList.remove('live');
+      recLabel.textContent = 'STANDBY';
+      fpsLabel.textContent = '— fps';
+      monBadge.classList.remove('active');
+      monLabel.textContent = 'STANDBY';
+      startBtn.style.display = '';
+      startBtn.disabled = false;
+      stopBtn.style.display = 'none';
+      document.body.classList.remove('emergency');
+      alertBanner.className = 'alert-banner lvl-0';
+      alertIcon.textContent  = '⚫';
+      alertTitle.textContent = 'System Stopped';
+      alertSub.textContent   = 'Press Start to resume monitoring';
+      alertBadge.textContent = 'OFFLINE';
+      log('Monitoring stopped', 'l-info');
+      drawWave([]);
+    }
+
+    startBtn.onclick = start;
+    stopBtn.onclick  = stop;
+
+    // Draw empty waveform on load
+    drawWave([]);
+  </script>
+</body>
+</html>
