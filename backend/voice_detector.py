@@ -12,10 +12,12 @@ SAMPLE_RATE = 16000
 # (filters sneezes <1s, yawns, coughs — all transient events)
 MIN_SAMPLES = int(SAMPLE_RATE * 3.0)
 
-# Clinical thresholds from MDVP/Praat literature (stored as fractions, not percent)
-# Normal jitter (period) < 1.0%; pathological > 1.5%  [PMC7053781, PMC9895185]
-_JITTER_MILD   = 0.010   # 1.0% — above normal
-_JITTER_SEVERE = 0.015   # 1.5% — clearly pathological
+# Detrended-jitter thresholds — after removing slow intonation trend the residual
+# jitter is ~0.2–0.5% for normal speech and ~1.0–2.0% for dysarthric speech.
+# Raw Praat thresholds (1.0 / 1.5%) do NOT apply here because the detrending
+# removes the same slow variation that Praat's pre-processing handles differently.
+_JITTER_MILD   = 0.004   # 0.4% detrended — above normal
+_JITTER_SEVERE = 0.009   # 0.9% detrended — clearly pathological
 
 # Normal shimmer (local) < 3.81%; pathological > 6.0%  [MDVP manual, PMC7053781]
 _SHIMMER_MILD   = 0.038  # 3.8% — above normal
@@ -111,14 +113,29 @@ def _yin_f0(signal: np.ndarray, sr: int) -> np.ndarray:
 
 
 def _compute_jitter(f0: np.ndarray) -> float:
-    """Compute period jitter (local) — mean absolute period difference / mean period.
-    Converts F0 to period domain to match clinical Praat jitter definition."""
+    """Compute period jitter — detrended to remove slow pitch intonation.
+
+    Raw frame-to-frame F0 differences mix true jitter with natural intonation
+    movement (which easily exceeds 10 Hz per 10 ms hop).  Subtracting a centred
+    7-frame moving-average trend (~70 ms) isolates the fast cycle-to-cycle
+    perturbation component that clinical tools (Praat, MDVP) call 'jitter'.
+    """
     voiced = f0[f0 > 0]
-    if len(voiced) < 3:
+    if len(voiced) < 5:
         return 0.0
-    periods = 1.0 / voiced  # convert Hz → seconds (period)
+    periods = 1.0 / voiced.astype(np.float64)  # Hz → seconds
     mean_period = float(np.mean(periods))
-    return float(np.mean(np.abs(np.diff(periods)))) / mean_period if mean_period > 0 else 0.0
+
+    # Centred moving-average detrend — window ≈ 70 ms, minimum 3
+    k = min(7, max(3, len(periods) // 4))
+    if k % 2 == 0:
+        k -= 1                              # keep odd for symmetric centring
+    half = k // 2
+    padded = np.pad(periods, half, mode='edge')
+    trend = np.convolve(padded, np.ones(k) / k, mode='valid')[:len(periods)]
+    residuals = periods - trend
+
+    return float(np.mean(np.abs(np.diff(residuals)))) / mean_period if mean_period > 0 else 0.0
 
 
 # Minimum fraction of frames that must be voiced before jitter/shimmer are meaningful.
@@ -129,8 +146,9 @@ _MIN_VOICED_RATIO = 0.20
 # Browser mic audio is often lower amplitude than expected due to AGC and downsampling.
 _MIN_RMS_ENERGY = 0.002
 
-# Jitter > 5% means the pitch tracker failed (noise, not dysarthria) — discard.
-_MAX_VALID_JITTER = 0.05
+# Detrended jitter > 15% means the pitch tracker completely failed — discard.
+# (Raw 5% gate was too strict: natural intonation alone exceeded it.)
+_MAX_VALID_JITTER = 0.15
 
 
 def _compute_shimmer_voiced(signal: np.ndarray, sr: int, voiced_mask: np.ndarray) -> float:
