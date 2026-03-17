@@ -100,14 +100,19 @@ def _yin_f0(signal: np.ndarray, sr: int) -> np.ndarray:
         cmnd[1:] = np.where(cumdf > 0.0, df[1:] * tau_range / cumdf, 1.0)
 
         tau_best = tau_min
+        voiced_frame = False
         for tau in range(tau_min, tau_max):
             if cmnd[tau] < 0.10:
+                # Slide to local minimum for sub-sample accuracy
                 while tau + 1 < tau_max and cmnd[tau + 1] < cmnd[tau]:
                     tau += 1
                 tau_best = tau
+                voiced_frame = True
                 break
 
-        f0_frames.append(float(sr) / tau_best if cmnd[tau_best] < 0.30 else 0.0)
+        # Only mark as voiced if threshold was actually crossed — prevents spurious
+        # 500 Hz classifications when the pitch tracker gets no valid candidate
+        f0_frames.append(float(sr) / tau_best if voiced_frame else 0.0)
 
     return np.array(f0_frames, dtype=np.float32)
 
@@ -159,7 +164,9 @@ def _compute_shimmer_voiced(signal: np.ndarray, sr: int, voiced_mask: np.ndarray
     amps = []
     for i, start in enumerate(range(0, len(signal) - frame_len, hop_len)):
         if i < len(voiced_mask) and voiced_mask[i]:
-            amps.append(float(np.max(np.abs(signal[start : start + frame_len]))))
+            # RMS amplitude is more stable than peak for shimmer estimation:
+            # peak is heavily noise-sensitive on single frames
+            amps.append(float(np.sqrt(np.mean(signal[start : start + frame_len] ** 2))))
     if len(amps) < 3:
         return 0.0
     a = np.array(amps, dtype=np.float32)

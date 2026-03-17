@@ -48,11 +48,18 @@ def _decode_frame(b64_jpeg: str):
 
 
 def _decode_audio_chunk(b64_audio: str):
+    """Decode a base64 audio chunk → float32 PCM at _SAMPLE_RATE.
+
+    Accepts:
+      • WAV (RIFF header) at any sample rate — resampled to 16 kHz if needed
+      • Raw PCM-16 bytes (no header) — assumed already at 16 kHz
+    """
     try:
         raw = base64.b64decode(b64_audio)
         if raw[:4] == b"RIFF":
             with wave.open(io.BytesIO(raw)) as wf:
                 frames = wf.readframes(wf.getnframes())
+                src_sr = wf.getframerate()
                 sampwidth = wf.getsampwidth()
                 n_channels = wf.getnchannels()
             dtype = np.int16 if sampwidth == 2 else np.int8
@@ -60,7 +67,16 @@ def _decode_audio_chunk(b64_audio: str):
             data /= np.iinfo(dtype).max
             if n_channels > 1:
                 data = data.reshape(-1, n_channels).mean(axis=1)
+            # Resample to target rate if client sent at a different rate
+            if src_sr != _SAMPLE_RATE and src_sr > 0 and len(data) > 0:
+                n_out = max(1, int(len(data) * _SAMPLE_RATE / src_sr))
+                data = np.interp(
+                    np.linspace(0, len(data) - 1, n_out),
+                    np.arange(len(data)),
+                    data,
+                ).astype(np.float32)
             return data
+        # Raw PCM-16 fallback (no header) — assumed 16 kHz
         pcm = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
         return pcm
     except Exception:
